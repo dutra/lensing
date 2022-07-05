@@ -5,6 +5,9 @@ import scipy.stats as stats
 import astropy.io.fits as pyfits
 import pylab
 
+import logging
+log = logging.getLogger("ps")
+
 class Lens(object):
     def __init__(self, input_map):
         self.input_map_filepath = input_map
@@ -81,53 +84,14 @@ class Lens(object):
         center = np.array([(x.max()-x.min())/2.0, (y.max()-y.min())/2.0])
 
         r = np.hypot(x - center[0], y - center[1])
+        #print(r)
         kbin_centers = 0.5*(kbins[1:]+kbins[:-1])
-        nr = np.histogram(r, kbins)[0]
+        #print(kbin_centers)
+        #print(1.0/r[500])
+        #print(1.0/kbin_centers)
+        nr = np.histogram(r.flatten(), kbins)[0]
 
-        power = np.histogram(r, kbins, weights=fourier_power_spectrum)[0] / np.histogram(r, kbins)[0]
+        power = np.histogram(r.flatten(), kbins, weights=fourier_power_spectrum.flatten())[0] / nr
         power *= self.fov_ster
 
-        return (kbin_centers, power)
-
-    def auto_power_obs(data, tet_1grid, pixel_size):
-        """
-        Computes the auto power
-
-        Parameters:
-        data:
-        mask:
-        tet_1grid:
-        pixel_size: pixel_size in arcsecs
-        """
-
-        ster2sqdeg = 3282.8
-        sqdeg2ster = (2*pi/360)**2
-        arcsec2deg = 1/(60*60)
-
-        # compute fov area in steradians
-        (nx, ny) = data.shape
-        area = float(nx)*float(ny)*(pixel_size*arcsec2deg)**2.0*sqdeg2ster
-
-        # compute fft normalized
-        flux_fft = fft.fft2(data)/data.size
-        amp = fft.fftshift(flux_fft)
-
-        # Auto power spectrum
-        ps2d = np.abs(amp)**2
-        print("ps2d", ps2d)
-
-        # Fourier space bins in arcsec^-1; tet_1grid in arcsecs
-        k_minmax = 1.0 /tet_1grid
-        print ("k_minmax after binning =",k_minmax)
-        # make bins monotonically increasing for azimuthal_averaging
-        k_minmax = k_minmax[::-1]
-        print ("monotonically increasing k_minmax =",k_minmax)
-
-        # pixel in arcsec
-        pairs, bin_center, power = azimuthal_average ( ps2d, k_minmax, 1.0/(pixel*nx_tot)  )
-
-        power *= area/f_clip
-
-        sig_p = power/(np.sqrt(0.5*pairs))
-
-        return (bin_center, pairs, amp, power, sig_p)
+        return (nr, kbin_centers, power)
