@@ -13,8 +13,8 @@ class Units(object):
         cosmo_flat = FlatLambdaCDM(H0=70.0, Om0=0.3, Tcmb0=2.7255)
         self.arcsec2kpc = cosmo_flat.kpc_proper_per_arcmin(self.z).value/60.0
 
-    def arcsec2dist(self, theta_ang):
-        return self.arcsec2kpc*theta_ang
+    def arcsec2dist(self):
+        return lambda t: self.arcsec2kpc*t
 
-    def dist2arcsec(self, theta_ang):
-        return theta_ang/self.arcsec2kpc
+    def dist2arcsec(self):
+        return lambda t: t/self.arcsec2kpc

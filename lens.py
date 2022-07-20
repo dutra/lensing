@@ -12,8 +12,9 @@ from utils import Units
 
 
 class Lens(object):
-    def __init__(self, input_map):
+    def __init__(self, input_map, binning):
         self.input_map_filepath = input_map
+        self.binning = binning
 
         self.load_file()
         self.calculate_field_size()
@@ -75,110 +76,7 @@ class Lens(object):
         print("---------------------------------")
 
 
-    def get_kbins_uniform(self, data, n=100):
-        interval = (0, np.max(data))
-        rbins = np.linspace(*interval, n+1)
-        return rbins
-
-    def get_kbins_uniform_ang(self, data, n=100):
-        angular_bins = np.linspace(1.0, 1533, n+1)
-        print(angular_bins)
-        kbins = 1.0 / angular_bins
-        kbins = kbins[::-1]
-
-        scale = 1/self.side_length_arcsec
-        return kbins/scale
-
-
-    def get_kbins_equal_frequency(self, data, n=100):
-        interval = (0, data.size)
-        rbins = np.interp(np.linspace(0, data.size, n+1),
-                          np.arange(data.size),
-                          np.sort(data))
-
-        return rbins
-
-    def get_kbins_experimental(self, data, n=100):
-
-        R = np.hypot(self.side_length_arcsec/2.0, self.side_length_arcsec/2.0)
-        print(R)
-        thetaa = np.array([R, R/3.0])
-        kbins = np.zeros(3)
-        kbins[0] = 0.0
-        kbins[1] = 2.0/thetaa[0] - kbins[0]
-        kbins[2] = 2.0/thetaa[1] - kbins[1]
-
-        kbins *= self.side_length_arcsec
-        print(kbins)
-
-        return kbins
-
-
-    def get_kbins_giulia(self):
-        # bin edges in arcsecs
-        tet_1grid_old = np.append((0.1+10**(.065*np.arange(50))), 1533.0)
-        tet_1grid_new=np.zeros(24,dtype=float)
-        tet_1grid_new[0]=3.41131121e+00
-        tet_1grid_new[1]=7.09841996e+00
-        tet_1grid_new[2]=1.10647820e+01
-        tet_1grid_new[3]=1.48910839e+01
-        tet_1grid_new[4]=1.72790839e+01
-        tet_1grid_new[5:22]=tet_1grid_old[20:37]
-        tet_1grid_new[22]=3.98207171e+02
-        tet_1grid_new[23]=1.53300000e+03
-        tet_1grid=np.zeros(24,dtype=float)
-        tet_1grid=tet_1grid_new
-
-        grid = tet_1grid
-
-        kbins = 1.0 / grid
-        kbins = kbins[::-1]
-
-        scale = 1/self.side_length_arcsec
-        return kbins/scale
-
-    def get_kbins_giulia_cats(self):
-        # bin edges in arcsecs
-        tet_1grid_old = np.append((0.1+10**(.065*np.arange(50))), 1533.0)
-        tet_1grid_new=np.zeros(24,dtype=float)
-        tet_1grid_new[0]=3.41131121e+00
-        tet_1grid_new[1]=7.09841996e+00
-        tet_1grid_new[2]=1.10647820e+01
-        tet_1grid_new[3]=1.48910839e+01
-        tet_1grid_new[4]=1.72790839e+01
-        tet_1grid_new[5:22]=tet_1grid_old[20:37]
-        tet_1grid_new[22]=3.98207171e+02
-        tet_1grid_new[23]=8.0000000e+02
-        tet_1grid=np.zeros(24,dtype=float)
-        tet_1grid=tet_1grid_new
-
-        grid = tet_1grid
-        print(grid)
-
-        kbins = 1.0 / grid
-        kbins = kbins[::-1]
-
-        scale = 1/self.side_length_arcsec
-        return kbins/scale
-
-    def get_kbins(self, method, data=None):
-        if method == "giulia":
-            return self.get_kbins_giulia()
-        if method == "giulia_cats":
-            return self.get_kbins_giulia_cats()
-        if method == "equal_frequency":
-            return self.get_kbins_equal_frequency(data)
-        if method == "experimental":
-            return self.get_kbins_experimental(data)
-        if method == "uniform_k":
-            return self.get_kbins_uniform(data)
-        if method == "uniform_angle":
-            return self.get_kbins_uniform_ang(data)
-
-    def set_kbins(self, kbins):
-        self.kbins = kbins
-
-    def compute_power_spectrum(self, kbin_method="giulia"):
+    def compute_power_spectrum(self):
         """
         Compute the angular power spectrum of input_map
         :param input_map: input map (n x n numpy array)
@@ -205,14 +103,7 @@ class Lens(object):
         kfreq_norm = np.sqrt(kfreq2D[0]**2 + kfreq2D[1]**2)
         kfreq_norm = kfreq_norm.flatten()
 
-        # set up k bins. The power spectrum will be evaluated in these bins
-        # kbins = self.get_kbins_equal_frequency(kfreq_norm, 100)
-        #kbins = self.get_kbins_uniform_ang(kfreq_norm, 100)
-        # kbins = self.get_kbins_giulia()
-        kbins = self.get_kbins(kbin_method, kfreq_norm)
-        kbins[0] = 0
-        print(kbins/self.side_length_arcsec)
-
+        kbins = self.binning.get_kbins()
         # use the middle points in each bin to define the values of k
         # where the PS is evaluated
         kvals = 0.5 * (kbins[1:] + kbins[:-1])
@@ -321,7 +212,7 @@ class Lens(object):
         else:
             plt.show()
 
-    def make_power_spectrum_q2_plot(self, smooth=True, outfile=None):
+    def make_power_spectrum_q2_plot(self, smooth=True, markers=False, outfile=None, xlimits=None, ylimits=None):
 
         nr = self.nr
         kbin_centers = self.kbin_centers
@@ -348,17 +239,26 @@ class Lens(object):
         y_minus = power_q_smooth - sig_q_power
 
 
-        ax.plot(theta_bin_centers, power_q_smooth, 'xr')
+        if markers:
+            ax.plot(theta_bin_centers, power_q_smooth, 'xr')
         ax.plot(theta_bin_centers, power_q_smooth, color='C0')
         ax.fill_between(theta_bin_centers, y_plus, y_minus, alpha=0.3)
         # ax.set_xscale('log')
         ax.set_yscale('log')
         ax.set_xlabel(r'$2\pi/q$ [arcsec]')
         ax.set_ylabel(r'$q^2 P_\kappa(q) / 2\pi$')
-        #ax.set_xlim(3.602922101421851, 808.5723924286702)
-        #ax.set_ylim(0.09120854396955308, 4.817770706717263)
-        # secax = ax.secondary_xaxis('top', functions=(arcsec2dist,dist2arcsec))
-        # secax.set_xlabel('distance [kpc]')
+
+        R = np.hypot(self.side_length_arcsec/2.0, self.side_length_arcsec/2.0)
+        if xlimits is None:
+            ax.set_xlim(0.1, R)
+        else:
+            ax.set_xlim(*xlimits)
+        if ylimits is None:
+            ax.set_ylim(0.03, 4.0)
+        else:
+            ax.set_ylim(*ylimits)
+        secax = ax.secondary_xaxis('top', functions=(self.units.arcsec2dist(), self.units.dist2arcsec()))
+        secax.set_xlabel('distance [kpc]')
         plt.tight_layout()
         if outfile:
             plt.savefig(outfile)
